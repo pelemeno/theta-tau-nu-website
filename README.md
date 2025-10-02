@@ -1,1 +1,1 @@
-Official website for the Theta Tau Northwestern University chapter
+Website for Theta Tau Northwestern University chapter
