@@ -138,7 +138,12 @@ body {
   align-items: flex-start;
   min-height: 100vh;
   padding: 60px 12%;
-  background: linear-gradient(135deg, var(--nu-purple) 50%, var(--tt-red));
+  background-image: url(Aerial-View-of-Chicago-Skyline-at-Sunset.webp);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-attachment: fixed;
+  background-size: cover;
+  /*background: linear-gradient(135deg, var(--nu-purple) 50%, var(--tt-red));*/
   color: var(--text-light);
 }
 
@@ -217,7 +222,7 @@ footer h3 {
   gap: 20px;
   justify-content: center;
   width: 100%;
-  margin-top: 50px;
+  margin-top: 45px;
 }
 .socials a img {
   width: 28px;
@@ -234,5 +239,5 @@ footer h3 {
   color: #aaa;
   text-align: center;
   width: 100%;
-  margin-bottom: 35px
+  margin-bottom: 25px
 }
