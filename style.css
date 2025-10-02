@@ -19,6 +19,66 @@ body {
   line-height: 1.6;
 }
 
+
+/* Navbar */
+.header {
+  width: 100%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 72px;
+}
+
+.navbar-logo {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.logo-link {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.logo {
+  height: 48px;
+  width: auto;
+}
+
+.navbar-nav {
+  flex: 2;
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+}
+
+.navbar-nav a {
+  color: var(--nu-purple);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.1rem;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+.navbar-nav a:hover {
+  background: var(--tt-gold);
+  color: #000;
+}
+
 /* Hero Section */
 .hero {
   display: flex;
