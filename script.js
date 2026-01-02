@@ -12,5 +12,3 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     }
   });
 });
-
-// Form submission is now handled by the form's action attribute (no JS needed for submission)
