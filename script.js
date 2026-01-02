@@ -1,3 +1,5 @@
+console.log('script.js loaded');
+
 // Smooth scrolling for internal links
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   anchor.addEventListener("click", function (e) {
@@ -13,12 +15,15 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 
 // Submit handler for the rush form: posts FormData to the Apps Script web app
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOMContentLoaded fired');
   const form = document.querySelector('.rush-form');
-  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw5t6rlp7oO5K1qpj3-P9wXLGChFKQanMoZk1F-xyt68pqPs39e9zEElUoAjK4moVl8/exec';
+  console.log('Form found:', form);
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyWvYAt8xPANFZmF0k3g435GRRU7hSTtJM3rYAkJLXOuOWKIvytweIljpfE9YafwoJV/exec';
   
   if (!form) return;
 
   form.addEventListener('submit', async (e) => {
+    console.log('Form submit event fired');
     e.preventDefault();
     const submitBtn = form.querySelector('button[type="submit"]');
     if (submitBtn) {
@@ -28,23 +33,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (submitBtn) submitBtn.textContent = 'Submitting...';
 
     const formData = new FormData(form);
+    console.log('FormData created, fields:', Array.from(formData.entries()));
 
     try {
+      console.log('Fetching to:', WEB_APP_URL);
       const resp = await fetch(WEB_APP_URL, {
         method: 'POST',
         body: formData,
         // Apps Script web apps support CORS for deployed web apps
       });
+      console.log('Response received, status:', resp.status);
 
       // Attempt to parse JSON response; Apps Script returns JSON text.
       let json = {};
-      try { json = await resp.json(); } catch (err) { /* ignore parse errors */ }
+      try { json = await resp.json(); console.log('Parsed JSON:', json); } catch (err) { console.log('Failed to parse JSON:', err); /* ignore parse errors */ }
 
       if (resp.ok && (json.status === 'success' || json.success === true || resp.status === 200)) {
+        console.log('Success, resetting form');
         alert('Application submitted — thank you!');
         form.reset();
       } else {
         const msg = json.message || json.error || 'Submission failed';
+        console.log('Submission failed:', msg);
         throw new Error(msg);
       }
     } catch (err) {
