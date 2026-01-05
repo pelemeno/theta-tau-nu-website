@@ -24,7 +24,7 @@
   </header>
   <section class="rush-page">
     <h1 class="main-title">Rush Theta Tau</h1>
-    <form class="rush-form" action="https://script.google.com/macros/s/AKfycbwDAizOtrBA6YX5asZkg-bW_YdxDSmKMrlVR88YSUIJGgy20wLEPKYixSTJHeQgpvVu/exec" method="post" enctype="multipart/form-data">
+  <form id="rushForm" class="rush-form" enctype="multipart/form-data">
       <div class="form-group">
         <label for="name">Full Name</label>
         <input type="text" id="name" name="name" required>
@@ -67,6 +67,7 @@
         <label for="referral">How did you hear about us?</label>
         <input type="text" id="referral" name="referral">
       </div>
+      <div id="formMessage" aria-live="polite" style="min-height:1.2rem"></div>
       <button type="submit" class="rush-btn">Submit Application</button>
     </form>
   </section>

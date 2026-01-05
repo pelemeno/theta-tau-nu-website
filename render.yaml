@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: theta-tau-backend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    # Note: configure environment variables in the Render dashboard after connect
+    # DATABASE_URL, ADMIN_USER, ADMIN_PASS, AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
