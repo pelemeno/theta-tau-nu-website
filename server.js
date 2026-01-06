@@ -8,7 +8,7 @@ const morgan = require('morgan');
 const multer = require('multer');
 const { Pool } = require('pg');
 
-// Use memory storage for multer since we'll upload directly to S3
+// Use memory storage for multer since we'll upload directly to S3 (or save to disk as fallback)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // AWS S3 configuration (require these env vars for S3 mode)
@@ -19,21 +19,6 @@ const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 
 let s3Client = null;
 let getSignedUrl = null;
-try {
-  // require inside try so app still runs if AWS SDK isn't installed
-  const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-  const { getSignedUrl: _getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-  getSignedUrl = _getSignedUrl;
-  if (AWS_REGION && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY) {
-    s3Client = new S3Client({ region: AWS_REGION, credentials: { accessKeyId: AWS_ACCESS_KEY_ID, secretAccessKey: AWS_SECRET_ACCESS_KEY } });
-    // attach to app locals for use later
-    app.locals.S3 = { s3Client, PutObjectCommand, GetObjectCommand };
-  } else {
-    console.warn('S3 not configured (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY required) — uploads will be disabled.');
-  }
-} catch (err) {
-  console.warn('AWS SDK not installed; S3 upload disabled. To enable, run npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner');
-}
 
 const app = express();
 app.use(helmet());
@@ -41,8 +26,29 @@ app.use(morgan('tiny'));
 app.use(cors({ origin: true }));
 app.use(express.json());
 
+// Ensure uploads directory exists and is served for local fallback
+const uploadsDir = path.join(__dirname, 'uploads');
+try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) { /* ignore */ }
+app.use('/uploads', express.static(uploadsDir));
+
 // Serve static site files from project root (index.html, style.css, rush.html, etc.)
 app.use(express.static(path.join(__dirname)));
+
+try {
+  // require inside try so app still runs if AWS SDK isn't installed
+  const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+  const { getSignedUrl: _getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+  getSignedUrl = _getSignedUrl;
+  if (AWS_REGION && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && S3_BUCKET) {
+    s3Client = new S3Client({ region: AWS_REGION, credentials: { accessKeyId: AWS_ACCESS_KEY_ID, secretAccessKey: AWS_SECRET_ACCESS_KEY } });
+    // attach to app locals for use later
+    app.locals.S3 = { s3Client, PutObjectCommand, GetObjectCommand };
+  } else {
+    console.warn('S3 not configured (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET required) — uploads will be saved locally.');
+  }
+} catch (err) {
+  console.warn('AWS SDK not installed; S3 upload disabled. To enable, run npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner');
+}
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -75,16 +81,24 @@ app.post('/api/applications', upload.single('resume'), async (req, res) => {
     let s3_key = null;
     let s3_url = null;
 
-    if (req.file && s3Client && S3_BUCKET) {
+    if (req.file) {
       const timestamp = Date.now();
       const safeName = (name || 'applicant').replace(/[^a-z0-9_-]/gi, '_');
       const filename = `${timestamp}_${safeName}_${req.file.originalname}`;
-      const { PutObjectCommand } = app.locals.S3;
-      const put = new PutObjectCommand({ Bucket: S3_BUCKET, Key: filename, Body: req.file.buffer, ContentType: req.file.mimetype });
-      await s3Client.send(put);
-      s3_key = filename;
-      // If bucket is public, you can construct a public URL; otherwise keep key and generate signed URLs for admin access
-      s3_url = `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${encodeURIComponent(filename)}`;
+      if (s3Client && S3_BUCKET) {
+        const { PutObjectCommand } = app.locals.S3;
+        const put = new PutObjectCommand({ Bucket: S3_BUCKET, Key: filename, Body: req.file.buffer, ContentType: req.file.mimetype });
+        await s3Client.send(put);
+        s3_key = filename;
+        // If bucket is public, you can construct a public URL; otherwise keep key and generate signed URLs for admin access
+        s3_url = `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${encodeURIComponent(filename)}`;
+      } else {
+        // Save to local uploads directory as a fallback
+        const filePath = path.join(uploadsDir, filename);
+        fs.writeFileSync(filePath, req.file.buffer);
+        s3_key = filename;
+        s3_url = `/uploads/${encodeURIComponent(filename)}`;
+      }
     }
 
     const result = await pool.query(
@@ -118,11 +132,15 @@ app.get('/api/admin/application/:id/resume', basicAuth, async (req, res) => {
     const { rows } = await pool.query('SELECT resume_path FROM public.applications WHERE id = $1', [id]);
     if (!rows.length || !rows[0].resume_path) return res.status(404).json({ error: 'Resume not found' });
     const key = rows[0].resume_path;
-    if (!s3Client || !getSignedUrl) return res.status(503).json({ error: 'S3 not configured' });
-    const { GetObjectCommand } = app.locals.S3;
-    const cmd = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
-    const url = await getSignedUrl(s3Client, cmd, { expiresIn: 60 * 60 });
-    res.json({ url });
+    // If S3 is configured, return a signed URL; otherwise return the local uploads URL
+    if (s3Client && getSignedUrl && S3_BUCKET) {
+      const { GetObjectCommand } = app.locals.S3;
+      const cmd = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+      const url = await getSignedUrl(s3Client, cmd, { expiresIn: 60 * 60 });
+      return res.json({ url });
+    }
+    const localUrl = `/uploads/${encodeURIComponent(key)}`;
+    res.json({ url: localUrl });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
