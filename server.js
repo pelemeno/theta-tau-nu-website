@@ -17,14 +17,20 @@ const AWS_REGION = process.env.AWS_REGION;
 const S3_BUCKET = process.env.S3_BUCKET;
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
-const AWS_KMS_KEY_ID = process.env.AWS_KMS_KEY_ID;
 
 let s3Client = null;
 let getSignedUrl = null;
 
 const app = express();
 app.use(helmet());
+// request logging: console + file
 app.use(morgan('tiny'));
+try {
+  const logStream = fs.createWriteStream(path.join(__dirname, 'server.log'), { flags: 'a' });
+  app.use(morgan('combined', { stream: logStream }));
+} catch (e) {
+  console.warn('Could not create server.log for request logging', e && e.message);
+}
 app.use(cors({ origin: true }));
 app.use(express.json());
 
@@ -53,6 +59,10 @@ try {
 } catch (err) {
   console.warn('AWS SDK not installed; S3 upload disabled. To enable, run npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner');
 }
+
+// Log S3 status at startup (mask secrets)
+const s3Configured = !!(AWS_REGION && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && S3_BUCKET && app.locals && app.locals.S3 && app.locals.S3.s3Client);
+console.log(`S3 configured: ${s3Configured} (bucket=${S3_BUCKET || 'none'}, region=${AWS_REGION || 'none'})`);
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -100,9 +110,9 @@ app.post('/api/applications', upload.single('resume'), async (req, res) => {
       const base = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 120);
       const filename = `${timestamp}_${rand}_${base}`;
 
-      if (s3Client && S3_BUCKET) {
+      if (s3Client && S3_BUCKET && app.locals && app.locals.S3 && app.locals.S3.s3Client) {
         const { PutObjectCommand } = app.locals.S3;
-        const putParams = {
+        const put = new PutObjectCommand({
           Bucket: S3_BUCKET,
           Key: filename,
           Body: req.file.buffer,
@@ -110,23 +120,26 @@ app.post('/api/applications', upload.single('resume'), async (req, res) => {
           ContentDisposition: `attachment; filename="${base}"`,
           ServerSideEncryption: 'AES256',
           ACL: 'private'
-        };
-        // If user provided a KMS key id/arn, use SSE-KMS
-        if (AWS_KMS_KEY_ID) {
-          putParams.ServerSideEncryption = 'aws:kms';
-          putParams.SSEKMSKeyId = AWS_KMS_KEY_ID;
+        });
+        try {
+          await s3Client.send(put);
+          s3_key = filename;
+          s3_url = null; // admin endpoint will generate signed URLs
+          console.log(`Uploaded resume to S3 bucket=${S3_BUCKET} key=${filename}`);
+        } catch (s3err) {
+          console.error('S3 upload failed, falling back to local save', s3err && s3err.message);
+          const filePath = path.join(uploadsDir, filename);
+          fs.writeFileSync(filePath, req.file.buffer);
+          s3_key = filename;
+          s3_url = `/uploads/${encodeURIComponent(filename)}`;
         }
-        const put = new PutObjectCommand(putParams);
-        await s3Client.send(put);
-        s3_key = filename;
-        // Use signed URLs for access (admin endpoint will generate them)
-        s3_url = null;
       } else {
         // Save to local uploads directory as a fallback
         const filePath = path.join(uploadsDir, filename);
         fs.writeFileSync(filePath, req.file.buffer);
         s3_key = filename;
         s3_url = `/uploads/${encodeURIComponent(filename)}`;
+        console.log(`Saved resume locally to ${filePath}`);
       }
     }
 
@@ -184,4 +197,24 @@ app.get('/admin', basicAuth, (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+// Prefer loopback for local development to avoid external binding issues.
+const HOST = process.env.HOST || '127.0.0.1';
+const server = app.listen(PORT, HOST, () => {
+  const addr = server.address();
+  console.log(`Server listening on ${addr && addr.address ? addr.address : HOST}:${addr && addr.port ? addr.port : PORT}`);
+});
+
+// Write startup info to server.log as well (non-sensitive parts only)
+try {
+  fs.appendFileSync(path.join(__dirname, 'server.log'), `${new Date().toISOString()} - Server started on ${HOST}:${PORT}\n`);
+} catch (e) { /* ignore */ }
+
+// Global handlers to capture uncaught errors and promise rejections
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException', err);
+  try { fs.appendFileSync(path.join(__dirname, 'server.log'), `${new Date().toISOString()} - uncaughtException: ${err && err.stack ? err.stack : err}\n`); } catch (e) {}
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection', reason);
+  try { fs.appendFileSync(path.join(__dirname, 'server.log'), `${new Date().toISOString()} - unhandledRejection: ${reason}\n`); } catch (e) {}
+});
