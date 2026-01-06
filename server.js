@@ -197,8 +197,9 @@ app.get('/admin', basicAuth, (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-// Prefer loopback for local development to avoid external binding issues.
-const HOST = process.env.HOST || '127.0.0.1';
+// If a platform (like Render) provides PORT, bind to all interfaces so the service checker can detect the open port.
+// Otherwise default to loopback for local development.
+const HOST = process.env.HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
 const server = app.listen(PORT, HOST, () => {
   const addr = server.address();
   console.log(`Server listening on ${addr && addr.address ? addr.address : HOST}:${addr && addr.port ? addr.port : PORT}`);
