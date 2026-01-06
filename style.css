@@ -1,3 +1,7 @@
+html {
+  scroll-behavior: smooth;
+}
+
 /* Rush Page Form */
 .rush-page {
   min-height: 100vh;
@@ -98,12 +102,6 @@ body {
 }
 }
 
-.logo-link {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
-
 .logo {
   height: 48px;
   width: auto;
@@ -138,7 +136,7 @@ body {
   align-items: flex-start;
   min-height: 100vh;
   padding: 60px 12%;
-  background-image: url(Aerial-View-of-Chicago-Skyline-at-Sunset.webp);
+  background-image: url(images/Aerial-View-of-Chicago-Skyline-at-Sunset.webp);
   background-repeat: no-repeat;
   background-position: center;
   background-attachment: fixed;
@@ -170,7 +168,6 @@ body {
   font-size: 1rem;
   text-decoration: none;
   transition: 0.3s ease;
-  margin-bottom: 20px;
 }
 .rush-btn:hover {
   background: #ffd15c;

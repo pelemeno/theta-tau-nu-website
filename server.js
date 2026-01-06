@@ -1,6 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -16,6 +17,7 @@ const AWS_REGION = process.env.AWS_REGION;
 const S3_BUCKET = process.env.S3_BUCKET;
 const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+const AWS_KMS_KEY_ID = process.env.AWS_KMS_KEY_ID;
 
 let s3Client = null;
 let getSignedUrl = null;
@@ -41,8 +43,10 @@ try {
   getSignedUrl = _getSignedUrl;
   if (AWS_REGION && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && S3_BUCKET) {
     s3Client = new S3Client({ region: AWS_REGION, credentials: { accessKeyId: AWS_ACCESS_KEY_ID, secretAccessKey: AWS_SECRET_ACCESS_KEY } });
-    // attach to app locals for use later
+    // attach to app locals for use later (include presigner)
     app.locals.S3 = { s3Client, PutObjectCommand, GetObjectCommand };
+    // attach presigner helper so other code can use it consistently
+    app.locals.getSignedUrl = getSignedUrl;
   } else {
     console.warn('S3 not configured (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET required) — uploads will be saved locally.');
   }
@@ -81,17 +85,42 @@ app.post('/api/applications', upload.single('resume'), async (req, res) => {
     let s3_key = null;
     let s3_url = null;
 
+    // Validate uploaded file (must be PDF)
     if (req.file) {
+      const ext = path.extname(req.file.originalname || '').toLowerCase();
+      const isPdfMime = (req.file.mimetype === 'application/pdf');
+      const isPdfExt = (ext === '.pdf');
+      if (!isPdfMime || !isPdfExt) {
+        return res.status(400).json({ ok: false, error: 'Resume must be a PDF file' });
+      }
+
+      // Create a safe, randomized filename to avoid collisions and injection
+      const rand = crypto.randomBytes(8).toString('hex');
       const timestamp = Date.now();
-      const safeName = (name || 'applicant').replace(/[^a-z0-9_-]/gi, '_');
-      const filename = `${timestamp}_${safeName}_${req.file.originalname}`;
+      const base = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 120);
+      const filename = `${timestamp}_${rand}_${base}`;
+
       if (s3Client && S3_BUCKET) {
         const { PutObjectCommand } = app.locals.S3;
-        const put = new PutObjectCommand({ Bucket: S3_BUCKET, Key: filename, Body: req.file.buffer, ContentType: req.file.mimetype });
+        const putParams = {
+          Bucket: S3_BUCKET,
+          Key: filename,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+          ContentDisposition: `attachment; filename="${base}"`,
+          ServerSideEncryption: 'AES256',
+          ACL: 'private'
+        };
+        // If user provided a KMS key id/arn, use SSE-KMS
+        if (AWS_KMS_KEY_ID) {
+          putParams.ServerSideEncryption = 'aws:kms';
+          putParams.SSEKMSKeyId = AWS_KMS_KEY_ID;
+        }
+        const put = new PutObjectCommand(putParams);
         await s3Client.send(put);
         s3_key = filename;
-        // If bucket is public, you can construct a public URL; otherwise keep key and generate signed URLs for admin access
-        s3_url = `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${encodeURIComponent(filename)}`;
+        // Use signed URLs for access (admin endpoint will generate them)
+        s3_url = null;
       } else {
         // Save to local uploads directory as a fallback
         const filePath = path.join(uploadsDir, filename);
@@ -133,10 +162,12 @@ app.get('/api/admin/application/:id/resume', basicAuth, async (req, res) => {
     if (!rows.length || !rows[0].resume_path) return res.status(404).json({ error: 'Resume not found' });
     const key = rows[0].resume_path;
     // If S3 is configured, return a signed URL; otherwise return the local uploads URL
-    if (s3Client && getSignedUrl && S3_BUCKET) {
+    if ((app.locals.S3 && app.locals.S3.s3Client) && (app.locals.getSignedUrl || getSignedUrl) && S3_BUCKET) {
       const { GetObjectCommand } = app.locals.S3;
+      const presigner = app.locals.getSignedUrl || getSignedUrl;
+      const client = app.locals.S3.s3Client || s3Client;
       const cmd = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
-      const url = await getSignedUrl(s3Client, cmd, { expiresIn: 60 * 60 });
+      const url = await presigner(client, cmd, { expiresIn: 60 * 60 });
       return res.json({ url });
     }
     const localUrl = `/uploads/${encodeURIComponent(key)}`;
