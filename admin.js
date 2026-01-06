@@ -1,5 +1,9 @@
 async function fetchApps() {
   const container = document.getElementById('list');
+  const toggle = document.getElementById('toggleInline');
+  // initialize toggle from localStorage
+  try { const v = localStorage.getItem('admin_open_inline'); if (v !== null) toggle.checked = v === 'true'; } catch (e) {}
+  toggle.addEventListener('change', () => { try { localStorage.setItem('admin_open_inline', toggle.checked); } catch (e) {} });
   try {
     const resp = await fetch('/api/admin/applications');
     if (!resp.ok) throw new Error(await resp.text());
@@ -36,7 +40,10 @@ async function fetchApps() {
       if (r.resume_path) {
         const btn = document.createElement('button'); btn.textContent = 'Get Resume'; btn.onclick = async () => {
           btn.disabled = true; btn.textContent = 'Loading...';
-          const res = await fetch(`/api/admin/application/${r.id}/resume`);
+          // send disposition based on toggle
+          const openInline = document.getElementById('toggleInline') && document.getElementById('toggleInline').checked;
+          const q = openInline ? '?disposition=inline' : '?disposition=attachment';
+          const res = await fetch(`/api/admin/application/${r.id}/resume${q}`);
           if (!res.ok) { alert('Failed to get resume'); btn.disabled=false; btn.textContent='Get Resume'; return; }
           const j = await res.json();
           window.open(j.url, '_blank'); btn.disabled=false; btn.textContent='Get Resume';

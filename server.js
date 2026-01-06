@@ -179,7 +179,11 @@ app.get('/api/admin/application/:id/resume', basicAuth, async (req, res) => {
       const { GetObjectCommand } = app.locals.S3;
       const presigner = app.locals.getSignedUrl || getSignedUrl;
       const client = app.locals.S3.s3Client || s3Client;
-      const cmd = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+      // Allow admin to request inline vs attachment via query param ?disposition=inline|attachment
+      const disposition = (req.query.disposition || 'attachment').toLowerCase();
+      const respDisposition = disposition === 'inline' ? `inline; filename="${key}"` : `attachment; filename="${key}"`;
+      const cmdParams = { Bucket: S3_BUCKET, Key: key, ResponseContentDisposition: respDisposition };
+      const cmd = new GetObjectCommand(cmdParams);
       const url = await presigner(client, cmd, { expiresIn: 60 * 60 });
       return res.json({ url });
     }
