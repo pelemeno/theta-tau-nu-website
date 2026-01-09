@@ -25,12 +25,6 @@ const app = express();
 app.use(helmet());
 // request logging: console + file
 app.use(morgan('tiny'));
-try {
-  const logStream = fs.createWriteStream(path.join(__dirname, 'server.log'), { flags: 'a' });
-  app.use(morgan('combined', { stream: logStream }));
-} catch (e) {
-  console.warn('Could not create server.log for request logging', e && e.message);
-}
 app.use(cors({ origin: true }));
 app.use(express.json());
 
@@ -41,6 +35,17 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Serve static site files from project root (index.html, style.css, rush.html, etc.)
 app.use(express.static(path.join(__dirname)));
+
+// If a built React app exists in client/dist, serve it as the primary frontend (SPA).
+const clientDist = path.join(__dirname, 'client', 'dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  // SPA fallback
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 try {
   // require inside try so app still runs if AWS SDK isn't installed
@@ -209,17 +214,13 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`Server listening on ${addr && addr.address ? addr.address : HOST}:${addr && addr.port ? addr.port : PORT}`);
 });
 
-// Write startup info to server.log as well (non-sensitive parts only)
-try {
-  fs.appendFileSync(path.join(__dirname, 'server.log'), `${new Date().toISOString()} - Server started on ${HOST}:${PORT}\n`);
-} catch (e) { /* ignore */ }
+// startup log
+console.log(`${new Date().toISOString()} - Server started on ${HOST}:${PORT}`);
 
 // Global handlers to capture uncaught errors and promise rejections
 process.on('uncaughtException', (err) => {
   console.error('uncaughtException', err);
-  try { fs.appendFileSync(path.join(__dirname, 'server.log'), `${new Date().toISOString()} - uncaughtException: ${err && err.stack ? err.stack : err}\n`); } catch (e) {}
 });
 process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection', reason);
-  try { fs.appendFileSync(path.join(__dirname, 'server.log'), `${new Date().toISOString()} - unhandledRejection: ${reason}\n`); } catch (e) {}
 });
