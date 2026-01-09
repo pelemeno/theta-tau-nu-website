@@ -1,6 +1,9 @@
 import React, { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 
 export default function Home(){
+  const location = useLocation();
+
   useEffect(()=>{
     // smooth scrolling for anchor links
     const anchors = Array.from(document.querySelectorAll('a[href^="#"]'));
@@ -12,6 +15,17 @@ export default function Home(){
     anchors.forEach(a=>a.addEventListener('click', onClick));
     return ()=>anchors.forEach(a=>a.removeEventListener('click', onClick));
   },[])
+
+  // Scroll to target if navigation supplied a scrollTo state
+  useEffect(()=>{
+    const targetId = location && location.state && location.state.scrollTo;
+    if (targetId){
+      const el = document.getElementById(targetId);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      // remove state from history to avoid repeated scrolling on back/forward
+      try { window.history.replaceState({}, document.title, window.location.pathname); } catch(e){}
+    }
+  }, [location]);
 
   return (
     <div>

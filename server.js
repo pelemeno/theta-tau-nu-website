@@ -33,11 +33,11 @@ const uploadsDir = path.join(__dirname, 'uploads');
 try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) { /* ignore */ }
 app.use('/uploads', express.static(uploadsDir));
 
-// Serve static site files from project root (index.html, style.css, rush.html, etc.)
-app.use(express.static(path.join(__dirname)));
+// Serve only images and uploads from project root; frontend is now the React app in client/dist
+app.use('/images', express.static(path.join(__dirname, 'images')));
 
-// If a built React app exists in client/dist, serve it as the primary frontend (SPA).
-const clientDist = path.join(__dirname, 'client', 'dist');
+// If a built React app exists in dist, serve it as the primary frontend (SPA).
+const clientDist = path.join(__dirname, 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   // SPA fallback
