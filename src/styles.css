@@ -113,18 +113,28 @@ body {
 	display: flex;
 	justify-content: center;
 	gap: 48px;
-	align-items: center;
 }
 
 .navbar-nav a,
 .navbar-nav button {
 	color: var(--nu-purple);
 	text-decoration: none;
+	font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 	font-weight: 600;
 	font-size: 1.1rem;
 	padding: 8px 16px;
 	border-radius: 4px;
-	transition: background 0.2s, color 0.2s;
+	transition: background 0.2s ease, color 0.2s ease;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	cursor: pointer;
+	min-height: 46px;
+	vertical-align: middle;
+	display: inline-block;
+	line-height: 1.1;
 }
 .navbar-nav a:hover,
 .navbar-nav button:hover {
@@ -132,11 +142,13 @@ body {
 	color: #000;
 }
 
-/* explicit classes for buttons */
+/* Ensure logo button has no focus/fill artifacts */
 .logo-link {
 	background: none;
 	border: none;
 	padding: 0;
+	box-shadow: none;
+	appearance: none;
 	cursor: pointer;
 }
 
@@ -158,7 +170,7 @@ body {
 
 .hero h1 {
 	font-size: 3rem;
-	font-weight: 700;
+	font-weight: 800;
 	margin-bottom: 0.5rem;
 	text-align: left;
 }
@@ -213,24 +225,18 @@ footer {
 	width: 100%;
 }
 
-footer h3 {
-	font-weight: 600;
-	margin-bottom: 10px;
-	text-align: center;
-}
-
 .socials {
 	display: flex;
 	gap: 20px;
 	justify-content: center;
 	width: 100%;
-	margin-top: 45px;
+	margin-top: 5px;
 }
 .socials a img {
 	width: 28px;
 	height: 28px;
 	filter: invert(100%);
-	transition: transform 0.2s;
+	transition: transform 0.2s ease;
 }
 .socials a img:hover {
 	transform: scale(1.1);
@@ -238,15 +244,8 @@ footer h3 {
 
 .copyright {
 	font-size: 0.9rem;
-	color: #aaa;
+	color: #bfbfbf;
 	text-align: center;
 	width: 100%;
-	margin-bottom: 25px
-}
-
-/* Admin container (moved from inline styles) */
-.admin-container {
-	padding: 20px;
-	max-width: 1100px;
-	margin: 0 auto;
+	margin-bottom: 5px;
 }
